@@ -1,0 +1,780 @@
+---
+title: "study1_happy_sad_power"
+author: "Sebastian Deri"
+date: "4/28/2020"
+output: html_document
+---
+
+# Preliminaries
+
+## settings
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## packages
+
+```{r}
+library(pwr)
+library(tidyverse)
+```
+
+# Analysis
+
+## Power
+
+I am going to compute power/sensitivity, using the "pwr" package (see documentation here: https://cran.r-project.org/web/packages/pwr/pwr.pdf), which has a function for computing the power for one proportion tests. Note, that here effect's size are measured using a statistic called H, which can be derived from the difference between proportions. (For example, the effect size h, for the difference between the proportions 0.5 and 0.6 is |h| = 0.20). This can be computed using the ES.h function in the "pwr" package. (Note further, that is it not just the distance between the proportions that determines h, but the proportions themselves. For example H for the difference between p = 0.6 and p = 0.7, is |h| = 0.21.)
+
+The effect size (h-value) of various proportions (where p1 = 0.50, and p2 = various possible proportions we might observe).
+
+Note, I am not sure if this is the correct/exact effect size statistic we want here, as h seems to be an effect size for the difference in two independent proportions (Chapter 6, "Difference Between Proportions", Statistical Power Analysis for the Behavioral Sciences, Jacob Cohen, 1988, Ed2). (However, in the "pwr" package, the pwr.p.test, say it computes the "Power calculations for proportion tests (one sample)"; yet, it takes as an input, an effect size h, which is computed from two proportions.)
+
+```{r}
+# initialize df to store values
+ES_h <- data.frame(p1 = sample(x = 0.50, size = 11, replace = TRUE),
+                           p2 = seq(from = 0.50, to = 1.00, by = 0.05),
+                           h = sample(x = NA, size = 11, replace = TRUE))
+
+# calculate effect sizes
+ES_h$h <- ES.h(p1 = ES_h$p1, ES_h$p2)
+
+# print all values
+ES_h
+
+```
+
+
+But actually, the prop.test function for a 1-sample proportion test in R uses a chi-square distribution to model its test statistic value under the null hypothesis. Thus, we need to measure our possible effect size in terms of W, the effect size statistic for chi-square test (more specifically, W1, chi-square goodness of fit statistic in the "pwr" package).
+
+Luckily, as above, the effect size statistic W, is a function of two proportions (P0, the null hypothesis proportion, and P1, the alternative hypothesis proportion). Thus, as above, we can examine the effect size, W, values keeping P0 constant at = 0.50, and examining how W varies as P1 increases from 0.50 to 1.00.
+
+(For further discussion of W, see: Chapter 7, "Chi-Square Tests for Goodness of Fit and Contingency Tables", Statistical Power Analysis for the Behavioral Sciences, Jacob Cohen, 1988, Ed2.)
+
+
+```{r}
+# initialize df to store values
+ES_w <- data.frame(P0 = sample(x = 0.50, size = 11, replace = TRUE),
+                   P1 = seq(from = 0.50, to = 1.00, by = 0.05),
+                   w = sample(x = NA, size = 11, replace = TRUE))
+
+# calculate effect sizes
+for (i in 1:nrow(ES_w)){ES_w$w[i] <- ES.w1(P0 = ES_w$P0[i], P1 = ES_w$P1[i])} 
+
+# print all values
+ES_w
+
+```
+
+Graph power, for a chi-square test, as a function of sample size (on x-axis) and effect size, w (as separate lines).
+
+To do this, first calculate all values.
+
+```{r}
+# set sample sizes and effect sizes to loop through
+n_vals <- seq(from = 10, to = 1000, by = 10)
+es_vals_w <- ES_w$w
+
+# create data frame to store values
+graph_ES_w <- data.frame(n = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_w))),
+                         es = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_w))),
+                         p_diff = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_w))),
+                         power = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_w))))
+
+# loop through all possible sample sizes and effect sizes, and calculate power
+i <- 0 # initialize counter
+for(n in n_vals){
+  for(es in es_vals_w){
+    i <- i + 1
+    graph_ES_w$n[i] <- n
+    graph_ES_w$es[i] <- es
+    graph_ES_w$p_diff[i] <- paste0(as.character(format(ES_w[ES_w$w == es, ]$P0, digits = 2, nsmall = 2)),
+                                   "-",
+                                   as.character(format(ES_w[ES_w$w == es, ]$P1, digits = 2, nsmall = 2)))
+    graph_ES_w$power[i] <- pwr.chisq.test(N = n,
+                                          w = es,
+                                          sig.level = 0.05,
+                                          df = 1)$power
+  }
+}
+
+# print resultant df (sample)
+graph_ES_w %>%
+  sample_n(size = 10)
+```
+
+Now, graph the result (where effect size is shown as W)
+
+```{r}
+ggplot(data = graph_ES_w,
+       aes(x = n,
+           y = power,
+           color = as.factor(round(es, 2)))) +
+  labs(color = "effect size (w)",
+       title = "Power for chi-square, as function of sample size and effect size") +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 1),
+                     breaks = seq(from = 0, to = 1, by = 0.05)) +
+  scale_x_continuous(limits = c(0, 350),
+                     breaks = seq(from = 0, to = 350, by = 25)) + # limit range of x-values, to see closer up
+  geom_hline(yintercept = c(0.80, 0.90),
+             color = "red")
+```
+
+Now, graph the result (where effect size is shown as difference between proportions)
+
+```{r}
+ggplot(data = graph_ES_w,
+       aes(x = n,
+           y = power,
+           color = p_diff)) +
+  labs(color = "effect size (prop diff)",
+       title = "Power for chi-square, as function of sample size and effect size") +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 1),
+                     breaks = seq(from = 0, to = 1, by = 0.05)) +
+  scale_x_continuous(limits = c(0, 350),
+                     breaks = seq(from = 0, to = 350, by = 25)) + # limit range of x-values, to see closer up
+  geom_hline(yintercept = c(0.80, 0.90),
+             color = "red")
+```
+
+Graph power, for a one-proportion test, as a function of sample size (on x-axis) and effect size, h (as separate lines).
+
+To do this, first calculate all values.
+
+```{r}
+# set sample sizes and effect sizes to loop through
+n_vals <- seq(from = 10, to = 1000, by = 10)
+es_vals_h <- ES_h$h
+
+# create data frame to store values
+graph_ES_h <- data.frame(n = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_h))),
+                         es = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_h))),
+                         p_diff = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_h))),
+                         power = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(es_vals_h))))
+
+# loop through all possible sample sizes and effect sizes, and calculate power
+i <- 0 # initialize counter
+for(n in n_vals){
+  for(es in es_vals_h){
+    i <- i + 1
+    graph_ES_h$n[i] <- n
+    graph_ES_h$es[i] <- es
+    graph_ES_h$p_diff[i] <- paste0(as.character(format(ES_h[ES_h$h == es, ]$p1, digits = 2, nsmall = 2)),
+                                   "-",
+                                   as.character(format(ES_h[ES_h$h == es, ]$p2, digits = 2, nsmall = 2)))
+    graph_ES_h$power[i] <- pwr.p.test(n = n,
+                                      h = es,
+                                      sig.level = 0.05)$power
+  }
+}
+
+# print resultant df (sample)
+graph_ES_h %>%
+  sample_n(size = 10)
+```
+
+Now, graph the result
+
+```{r}
+ggplot(data = graph_ES_h,
+       aes(x = n,
+           y = power,
+           color = as.factor(round(es, 2)))) +
+  labs(color = "effect size (h)",
+       title = "Power for one-prop test, as function of sample size and effect size") +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 1),
+                     breaks = seq(from = 0, to = 1, by = 0.05)) +
+  scale_x_continuous(limits = c(0, 350),
+                     breaks = seq(from = 0, to = 350, by = 25)) + # limit range of x-values, to see closer up
+  geom_hline(yintercept = c(0.80, 0.90),
+             color = "red")
+```
+
+```{r}
+ggplot(data = graph_ES_h,
+       aes(x = n,
+           y = power,
+           color = p_diff)) +
+  labs(color = "effect size (prop diff)",
+       title = "Power for one-prop test, as function of sample size and effect size") +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, 1),
+                     breaks = seq(from = 0, to = 1, by = 0.05)) +
+  scale_x_continuous(limits = c(0, 350),
+                     breaks = seq(from = 0, to = 350, by = 25)) + # limit range of x-values, to see closer up
+  geom_hline(yintercept = c(0.80, 0.90),
+             color = "red")
+```
+
+Exact calculation of N we need, with specified effect size and power (90%).
+
+```{r}
+pwr.chisq.test(w = ES.w1(P0 = 0.50,
+                         P1 = (2/3)),
+               power = 0.90,
+               df = 1,
+               sig.level = 0.05)
+```
+
+Exact calculation of effect size, with specified sample size and power (90%).
+
+```{r}
+pwr.chisq.test(N = 200,
+               power = 0.90,
+               df = 1,
+               sig.level = 0.05)
+```
+
+What proportions (fixing P0 AT 0.50) does that effect size correspond to.
+
+```{r}
+ES.w1(P0 = 0.50,
+      P1 = 0.66207715)
+```
+
+Final Statement on Power (i.e. wording in Pre-registration):
+
+Our main analyses involve a one-proportion test, where we compare our observed proportion to a null proportion value (p = 0.50), using the prop.test function in R, with a Yates continuity correction. Under the null, this test should have a test statistic that follows a chi-square distribution with one degree of freedom. Thus, in our power analysis, we used the W statistic, which can be used to quantify effect sizes in chi-square distributions (see: Chapter 7, "Chi-Square Tests for Goodness of Fit and Contingency Tables", Statistical Power Analysis for the Behavioral Sciences, Jacob Cohen, 1988, Ed2.). This W statistic is a function of a null proportion, P0, (here, we specified P0 = 0.50) and an alternative proportion, P1 . (e.g. For P0 = 0.50, and P1 = 0.60, W = 0.14.)
+
+While of course arbitrary, we decided on a minimum effect size of interest here of W = 0.2357, which corresponds to a W value computed from P0 = 0.50, and P1 = 2/3 = 0.666(repeating). To have 90% power to detect an effect of size W = 0.2357 (with alpha level = 0.05, and df = 1), we would need to collect as sample of size N = 190. Thus, we decided to "round up" and collect a sample of size N = 200.
+
+Power calculations were completed using "pwr" package in R, developed by Helios De Rosario (https://www.rdocumentation.org/packages/pwr/versions/1.3-0)--and in particular, relying on the "ES.w1" and "pwr.chisq.test" functions.
+
+## Margin of Error
+
+Someone else mentioned the idea of of figuring out the "desired margin of error" of a result (e.g. something like precision of the confidence interval). Most standardly, for proportions, the CI seems to be a function of the observed proportion itself and N (e.g. usually something like: proportion estimate +/- distribution statistic * SE estimate, where SE estimate = f(proportion, N)).
+
+Maybe there are more sophisticated ways to do this, but since I know the exact function, I will use to compute a possible CI (i.e. prop.test), I can just loop through all the possible proportion values (i.e. 0 to 1) and various values of N (e.g. N from 10 to 1000) and examine the precision of the CI's generated.
+
+(This isn't the same thing as coverage probability, so I might want to examine that instead.)
+
+```{r}
+# values to loop through
+n_vals <- seq(from = 10, to = 1000, by = 10)
+props <- c(seq(from = 0.50, to = 0.80, by = 0.05), 0.9)
+
+# df to store results
+marg <- data.frame(n = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(props))),
+                   p = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(props))),
+                   ci_low = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(props))),
+                   ci_high = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(props))),
+                   ci_width = sample(x = NA, replace = TRUE, size = (length(n_vals) * length(props))))
+
+
+# generate results
+i <- 0 # initialize counter
+for (n in n_vals){
+  for(p in props){
+    
+    i <- i + 1
+    marg$n[i] <- n
+    marg$p[i] <- paste0("0.50-", as.character(format(p, digits=2, nsmall=2)))
+    
+    prop_test_i <- prop.test(x = n*p,
+                             n = n,
+                             p = 0.5)
+    
+    marg$ci_low[i] <- prop_test_i$conf.int[1]
+    marg$ci_high[i] <- prop_test_i$conf.int[2]
+    marg$ci_width[i] <- prop_test_i$conf.int[2]-prop_test_i$conf.int[1]
+  }
+}
+
+# print resultant df
+marg %>%
+  sample_n(size = 10)
+```
+
+Graph results
+
+```{r fig.width=10, fig.height=7}
+ggplot(data = marg,
+       aes(x = n,
+           y = ci_width,
+           color = p)) +
+  labs(title = "CI Width as a function N and effect size",
+       color = "effect size \n (p_null-p_observed)") +
+  geom_point() +
+  geom_line() +
+  scale_y_continuous(limits = c(0, max(marg$ci_width)),
+                     breaks = seq(from = 0, to = 1, by = 0.05)) +
+  scale_x_continuous(limits = c(0, 500),
+                     breaks = seq(from = 0, to = 500, by = 25)) +
+  geom_hline(yintercept = c(0.05, 0.10, 0.20),
+             color = "red",
+             linetype = "dotted")
+```
+
+# NEW STUFF (Dec 2020)
+
+```{r}
+samples <- vector(length = 100, mode = "integer")
+
+for (i in 1:100){
+  
+  # generate sample
+  sample_i <- table(sample(x = c(0, 1), size = 100, replace = TRUE, prob = c(0.1, 0.9)))
+  
+  # store
+  samples[i] <- sample_i[2]
+  
+}
+
+# print
+samples
+```
+## Margin of Error Analysis
+
+Here I pick a sample size and an underlying true proportion. I then generate many, many samples of that size, and examine the percent of the samples that are within some distance of the true proportion.
+
+
+
+```{r}
+rbinom(n = 1000, size = 100, prob = 0.5)
+
+
+sort(rbinom(n = 1000, size = 100, prob = 0.5))
+
+quantile(x = sort(rbinom(n = 1000, size = 100, prob = 0.5)),
+         probs = c(0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99))
+
+
+sample_size <- 5000
+true_prop <- 0.20
+
+quantile(
+  x = (sort(rbinom(n = 1000000, size = sample_size, prob = true_prop))/sample_size) * 100 - (true_prop*100),
+  probs = c(0.01, 0.025, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.975, 0.99))
+
+```
+
+Here, I am going to do a more standard power analysis. I want to know what percent of the time if there is some size difference between two conditions (e.g. 1% difference between wording version 1 and wording version 2) a chi-square test will detect those differences.
+
+Results:
+1. If you have two proportions (50% and 51%) and take samples of size 100. Then you will reject the null hypothesis ~4.1% of the time (which is weird because it should be 5% of the time, just under the null hypothesis; but maybe the adjustment or something else changes things. Yes, when I turn off correction, then I reject the null around 5.8% of the time. These are with 100k sims, so assume converging/approach actual value.)
+
+2. Two proportions = 50% and 51%. Sample size = 200. Number simulations = 100,000. Power (% of time rejecting null) = 5.7% (w/ correction off; 4.5%, with correction on)
+
+3. Two proportions = 50% and 50% (i.e. same). Sample size = 200. Number simulations = 100,000. Power (% of time rejecting null) = 5.1% (w/ correction off; 4.2%, with correction on)
+
+4. Two proportions = 50% and 51%. Sample size = 500. Number simulations = 100,000. Power (% of time rejecting null) = 6.6% (w/ correction off; 5.6%, with correction on)
+
+5. Two proportions = 50% and 51%. Sample size = 1,000. Number simulations = 100,000. Power (% of time rejecting null) = 7.6% (w/ correction off; 7%, with correction on)
+
+6. Two proportions = 50% and 51%. Sample size = 5,000. Number simulations = 100,000. Power (% of time rejecting null) = 17.1% (w/ correction off; 16.7%, with correction on)
+
+7. Two proportions = 50% and 51%. Sample size = 10,000. Number simulations = 100,000. Power (% of time rejecting null) = 29.2% (w/ correction off; 28.7y%, with correction on)
+
+8. Two proportions = 50% and 51%. Sample size = 15,000. Number simulations = 100,000. Power (% of time rejecting null) = 41.0% (w/ correction off; 40.5%, with correction on)
+
+9. Two proportions = 50% and 51%. Sample size = 20,000. Number simulations = 100,000. Power (% of time rejecting null) = 51.9% (w/ correction off; 51.5%, with correction on)
+
+10. Two proportions = 50% and 51%. Sample size = 50,000. Number simulations = 100,000. Power (% of time rejecting null) = 88.5% (w/ correction off; 88.6%, with correction on)
+
+11. Two proportions = 50% and 51%. Sample size = 75,000. Number simulations = 100,000. Power (% of time rejecting null) = 97.2% (w/ correction off; 97.2%, with correction on)
+
+12. Two proportions = 50% and 51%. Sample size = 100,000. Number simulations = 100,000. Power (% of time rejecting null) = 99.4% (w/ correction off; 99.4%, with correction on)
+
+13. Two proportions = 20% and 21%. Sample size = 1,000. Number simulations = 100,000. Power (% of time rejecting null) = 8.6% (w/ correction off; 7.8%, with correction on)
+
+14. Two proportions = 20% and 21%. Sample size = 10,000. Number simulations = 100,000. Power (% of time rejecting null) = 41.8% (w/ correction off; 41.0%, with correction on)
+
+```{r, warning=FALSE}
+# parameters
+sample_size <- 100
+correct_on <- TRUE
+prop_1 <- 0.05
+prop_2 <- 0.00
+n_sims <- 10
+power_vec <- vector(mode = "numeric", length = n_sims)
+
+
+# generate data/run simulation
+for (i in 1:n_sims){
+  # hypothetical observed samples
+  sample_1 <- rbinom(n = 1, size = sample_size, prob = prop_1)
+  sample_2 <- rbinom(n = 1, size = sample_size, prob = prop_2)
+  # sample_1
+  # sample_2
+  
+  # store results in matrix
+  results <- matrix(byrow = TRUE, nrow = 2, data = c(sample_1, sample_size-sample_1, sample_2, sample_size-sample_2))
+  print(results)
+
+  # conduct chi-square test on results
+  chi_result <- chisq.test(x = results, correct = correct_on)
+  print(chi_result)
+  
+  # store p-value of result
+  power_vec[i] <- chi_result$p.value
+  
+}
+
+# print results
+table(power_vec < 0.05) / n_sims
+
+
+# results
+tab <- table(power_vec < 0.05, useNA = "always") / n_sims
+tab
+tab['TRUE']
+
+
+```
+
+Print results. Specifically, I want to see the proportion of chi-square tests that were significant, and thus resulted in rejecting the null hypothesis.
+
+```{r}
+# print results
+table(power_vec < 0.05) / n_sims
+```
+
+## For Loop
+
+```{r warning=FALSE}
+# note: warnings turned off (there were warnings for chi-square tests w/ small samples)
+
+# parameters
+prop_1 <- c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50) / 100
+dist_prop_2 <- c(0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100) / 100
+sample_size <- c(10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
+n_sims <- c(100000)
+n_rows <- length(prop_1) * length(dist_prop_2) * length(sample_size) * length(n_sims)
+
+
+
+# create data frame to store results
+empty_col <- vector(mode = "numeric", length = n_rows)
+MOE <- data.frame(prop1      = empty_col,
+                  dist_prop2 = empty_col,
+                  n          = empty_col,
+                  n_sims     = empty_col,
+                  power      = empty_col)
+
+# loop through simulation possibilities
+counter <- 0
+start_time <- Sys.time()
+
+for (prop in prop_1){
+  for (dist in dist_prop_2){
+    for (n in sample_size){
+      
+      
+      # increment counter
+      counter <- counter + 1
+      
+      # parameters
+      sample_size_i <- n
+      correct_on <- TRUE
+      prop_1_i <- prop
+      prop_2_i <- min(prop+dist, 1)
+      n_sims_i <- n_sims
+      power_vec <- vector(mode = "numeric", length = n_sims)
+      
+      
+      # generate data/run simulation
+      for (i in 1:n_sims){
+        # hypothetical observed samples
+        sample_1 <- rbinom(n = 1, size = sample_size_i, prob = prop_1_i)
+        sample_2 <- rbinom(n = 1, size = sample_size_i, prob = prop_2_i)
+        
+        # store results in matrix
+        results <- matrix(byrow = TRUE, nrow = 2, data = c(sample_1, sample_size_i-sample_1, sample_2, sample_size_i-sample_2))
+      
+        # conduct chi-square test on results
+        chi_result <- chisq.test(x = results, correct = correct_on)
+        # print(chi_result) ######### TEST #########
+        
+        # store p-value of result
+        power_vec[i] <- chi_result$p.value
+        # print(power_vec) ######### TEST #########
+        
+      }
+      
+      # store results from this instance
+      table <- table(power_vec < 0.05) / n_sims
+      # print(table) ######### TEST #########
+      MOE[counter, 'prop1'] <- prop
+      MOE[counter, 'dist_prop2'] <- dist
+      MOE[counter, 'n'] <- n
+      MOE[counter, 'n_sims'] <- n_sims
+      MOE[counter, 'power'] <- table['TRUE']
+      
+      # print progress
+      print(paste0("ITER: ", counter))
+      print(paste0("prop=", prop, ", dist=", dist, ", n=", n))
+      print(paste0("Time: ", Sys.time()))
+      print(difftime(time1 = Sys.time(), time2 = start_time))
+      print(paste0("Progress: ", round(counter / n_rows*100, 2), "%"))
+      print("-----------------------------")
+      
+    }
+  }
+}
+
+
+# save table of results, immediately on finishing
+save(MOE, file = gsub(":", ".", gsub(" ", "_", paste0("MOE_", Sys.time(), ".Rda"))))
+write.csv(MOE, file = gsub(":", ".", gsub(" ", "_", paste0("MOE_", Sys.time(), ".csv"))), row.names=FALSE)
+
+```
+
+## output: data frame
+
+```{r}
+#MOE
+load("MOE_2020-12-31_23.02.41.Rda") # SHORTCUT, bc rest of code hasn't been run
+MOE
+```
+
+
+## visualize
+
+```{r, fig.width=15, fig.height=12}
+# make plot
+power_plot <-
+MOE %>% 
+ggplot(aes(x = prop1,
+           y = power)) +
+  geom_point() +
+  facet_grid(n ~ dist_prop2) +
+  guides(fill = FALSE,
+         color = FALSE) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 5))
+
+# print plot
+power_plot
+
+# save plot
+if (FALSE){
+ggsave(plot = power_plot,
+       filename = "power_plot.pdf",
+       width=12,
+       height=12)
+}
+```
+
+## plot, other way
+
+```{r, fig.width=15, fig.height=12}
+MOE %>% 
+ggplot(aes(x = prop1,
+           y = power)) +
+  geom_point(size = 1,
+             color = "red") +
+  geom_rect(xmin = -1,
+            xmax = 1,
+            ymin = 0.9,
+            ymax = 2,
+            fill = "blue",
+            color = NA,
+            alpha = 0.025) +
+  geom_line(color = "red") +
+  #geom_hline(yintercept = c(0.90),
+  #           color = "blue") +
+  facet_grid(dist_prop2 ~ n) +
+  guides(fill = FALSE,
+         color = FALSE) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 5))
+```
+## plot, focus on n=200
+
+```{r, fig.width=15, fig.height=7}
+MOE %>% 
+filter(n == 200) %>% 
+ggplot(aes(x = prop1,
+           y = power)) +
+  geom_point(size = 1,
+             color = "red") +
+  geom_line(color = "red") +
+  geom_hline(yintercept = c(0.90),
+             color = "blue") +
+  facet_grid(n ~ dist_prop2) +
+  guides(fill = FALSE,
+         color = FALSE) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 5))
+```
+
+## plot, distances together
+
+```{r, fig.width=15, fig.height=5}
+MOE %>% 
+  mutate(dist_prop2 = factor(dist_prop2)) %>% 
+ggplot(aes(x = prop1,
+           y = power,
+           color = dist_prop2)) +
+  geom_point(size = 1) +
+  geom_line() +
+  geom_rect(xmin = -1,
+            xmax = 1,
+            ymin = 0.9,
+            ymax = 2,
+            fill = "blue",
+            color = NA,
+            alpha = 0.005) +
+  facet_grid(. ~ n) +
+  #guides(fill = FALSE,
+  #       color = FALSE) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 5))
+```
+
+## plot, distances together
+
+```{r, fig.width=15, fig.height=5}
+MOE %>% 
+ # filter(dist_prop2 < 0.03) %>%
+  mutate(dist_prop2 = factor(dist_prop2),
+         n = factor(n)) %>%
+ggplot(aes(x = n,
+           y = power,
+           color = dist_prop2,
+           group = dist_prop2)) +
+  #geom_point(size = 1) +
+  geom_line() +
+  facet_grid(. ~ prop1) +
+  #guides(fill = FALSE,
+  #       color = FALSE) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 5))
+```
+
+## plot, other way UNFINISHED
+
+```{r, fig.width=15, fig.height=12}
+MOE %>% 
+ggplot(aes(x = prop1,
+           y = power)) +
+  geom_point(size = 1,
+             color = "red") +
+  geom_rect(xmin = -1,
+            xmax = 1,
+            ymin = 0.9,
+            ymax = 2,
+            fill = "blue",
+            color = NA,
+            alpha = 0.025) +
+  geom_line(color = "red") +
+  #geom_hline(yintercept = c(0.90),
+  #           color = "blue") +
+  facet_grid(dist_prop2 ~ n) +
+  guides(fill = FALSE,
+         color = FALSE) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 5))
+```
+
+## 1 percent difference
+
+
+This is not a power analysis. But this is the size of the sample needed to detect a one percentage point difference between conditions.
+
+Here is one result. If the observed proportion in condition 1 is 20% and in condition 2 it is 21%, then that difference will only "become" significant when the sample is of size ~12,750. If there is a one percentage point difference, but the true proportions are 50% and 51%, then the sample needs to be of size ~19,500, for the chi-square test to be significant.
+
+```{r}
+# parameters
+sample_size <- 19500
+prop_1 <- 0.50
+prop_2 <- 0.51
+
+
+# statistical test
+chisq.test(x = matrix(byrow = TRUE, nrow = 2, data = sample_size*c(prop_1, 1-prop_1, prop_2, 1-prop_2)))
+
+```
+
+
+```{r}
+prop.test(x = 50,
+          n = 100,
+          p = 0.5)
+           
+```
+```{r}
+rbinom(n = 7, size = 100, prob = 0.8) / 100 * 100
+
+```
+
+
+```{r}
+hist(rbinom(n = 100, size = 10, prob = 0.5))
+```
+
+
+
+# END/MISC
+
+```{r}
+# note: warnings turned off (there were warnings for chi-square tests w/ small samples)
+
+# parameters
+prop_1 <- c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50) / 100
+dist_prop_2 <- c(0, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100) / 100
+sample_size <- c(10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
+n_sims <- c(100000)
+n_rows <- length(prop_1) * length(dist_prop_2) * length(sample_size) * length(n_sims)
+
+
+
+# create data frame to store results
+empty_col <- vector(mode = "numeric", length = n_rows)
+MOE <- data.frame(prop1      = empty_col,
+                  dist_prop2 = empty_col,
+                  n          = empty_col,
+                  n_sims     = empty_col,
+                  power      = empty_col)
+
+# loop through simulation possibilities
+counter <- 0
+start_time <- Sys.time()
+
+for (prop in prop_1){
+  for (dist in dist_prop_2){
+    for (n in sample_size){
+      
+      
+      # increment counter
+      counter <- counter + 1
+      print(counter)
+      
+      # parameters
+      sample_size_i <- n
+      correct_on <- TRUE
+      prop_1_i <- prop
+      prop_2_i <- min(prop+dist, 1)
+      n_sims_i <- n_sims
+      power_vec <- vector(mode = "numeric", length = n_sims)
+      
+    }
+  }
+}
+```
+
+
+```{r}
+        sample_1 <- rbinom(n = 1, size = sample_size_i, prob = prop_1_i)
+        sample_2 <- rbinom(n = 1, size = sample_size_i, prob = prop_2_i)
+        
+        # store results in matrix
+        results <- matrix(byrow = TRUE, nrow = 2, data = c(sample_1, sample_size_i-sample_1, sample_2, sample_size_i-sample_2))
+      
+        # conduct chi-square test on results
+        chi_result <- chisq.test(x = results, correct = correct_on)
+```
+

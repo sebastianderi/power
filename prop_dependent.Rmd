@@ -1,0 +1,177 @@
+---
+title: "prop_dependent"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# --- Settings ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+plot_save <- FALSE
+```
+
+
+# --- Packages ---
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(PropCIs)
+library(gee)
+
+```
+
+# --- Load Data ---
+
+# 1. read
+
+```{r}
+ex_raw <- read.table("http://www.stat.ufl.edu/~aa/cat/data/Envir_opinions.dat", header=TRUE)
+```
+
+# 2. view
+
+```{r}
+View(ex_raw)
+ex_raw
+```
+
+# 3. shape
+
+```{r}
+# make tabular
+ex <- xtabs(data = ex_raw,
+            formula = ~y1 + y2)
+
+# view
+ex
+```
+# --- Analysis ---
+
+# 1. mcnemar test
+
+- test if there is dependency between two categorical variables (i.e. whether is evidence against marginal homogeneity).
+- see, Agresti, Chapter 8, p. 227-228
+- so: result, is that we don't have evidence against marginal homogeneity. which makes sense. props look close
+
+```{r}
+mcnemar.test(x = ex,
+             correct = FALSE)
+```
+
+```{r}
+addmargins(ex)
+
+colSums(prop.table(ex)) # yes & no on taxes (which vary along the rows)
+rowSums(prop.table(ex)) # yes & no on living standards (which vary along the columns)
+
+```
+
+# 2. CIs
+
+```{r}
+diffpropci.Wald.mp(b = 132, c = 107, n = 1144, conf.level = 0.95)
+diffpropci.Wald.mp(b = 107, c = 132, n = 1144, conf.level = 0.95)
+diffpropci.Wald.mp(b = ex[1, 2], c = ex[2, 1], n = sum(ex), conf.level = 0.95)
+
+scoreci.mp(b = ex[1,2], c = ex[2,1], n = sum(ex), conf.level = 0.95)
+```
+# 3. regression
+
+```{r}
+ex_raw2 <- read.table("http://www.stat.ufl.edu/~aa/cat/data/Opinions.dat", header=TRUE)
+ex_raw2
+
+m1 <- gee(data = ex_raw2,
+          formula = y ~ question,
+          id = person,
+          family = binomial(link = "identity"))
+
+m1
+
+summary(m1)
+
+```
+
+
+```{r}
+m2 <- gee(data = ex_raw2,
+          formula = y ~ question,
+          id = person,
+          family = binomial(link = "logit"))
+
+m2
+
+summary(m2)
+```
+# 4. all possible odds ratios
+
+```{r}
+df_odds <- data.frame(i = integer(101*101),
+                      prop_1 = double(101*101),
+                      prop_2 = double(101*101),
+                      or = double(101*101))
+i <- 0
+for (prop_1 in seq(0, 1, 0.01)){
+  for (prop_2 in seq(0, 1, 0.01)){
+  i <- i + 1
+  
+  df_odds[i,]$i <- i
+  df_odds[i,]$prop_1 <- prop_1
+  df_odds[i,]$prop_2 <- prop_2
+  df_odds[i,]$or <- (prop_1/(1 - prop_1))/(prop_2/(1 - prop_2))
+  
+  }
+}
+
+df_odds
+```
+
+```{r, fig.width=10, fig.height=10}
+df_odds %>% 
+  mutate(or = round(or, 1),
+         or = case_when(or > 10 ~ 10,
+                        or <= 10 & or >= 1 ~ or,
+                        or < 1 & or >= 1 ~ 0.5,
+                        or < 0.01 ~ 0)) %>% 
+  ggplot(aes(x = prop_1,
+             y = prop_2,
+             fill = or,
+             label = or)) +
+  geom_raster() + 
+  #geom_text(size = 1, color = "white") +
+  theme_bw()
+
+```
+
+
+
+
+# --- MISC/END ---
+
+```{r}
+
+m_p1 <- matrix(data = rep(0:100, 101)/10,
+               nrow = 101)
+
+m_p2 <- matrix(data = rep(0:101, each = 101)/10,
+                ncol = 101)
+
+m_p1
+m_p2
+#m_p1 + m_p2
+#m_p1 * m_p2
+#round(m_p1 / m_p2, 1)
+
+m_odds <- (m_p1 / (1 - m_p1))/(m_p2 / (1 - m_p2))
+
+colnames(m_odds) <- c(seq(0, 1, 0.1))
+rownames(m_odds) <- c(seq(0, 1, 0.1))
+round(m_odds, 2)
+
+```
+
