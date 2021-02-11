@@ -12,11 +12,13 @@ knitr::opts_chunk$set(echo = TRUE)
 # --- Packages ---
 
 ```{r}
-#library(readxl)
+
 library(tidyverse)
+library(MESS)
+
 #library(PropCIs)
 #library(gee)
-library(MESS)
+#library(readxl)
 
 ```
 
@@ -144,6 +146,89 @@ m3
 mcnemar.test(m3)
 ```
 
+Okay, but before we collect data, we don't actually know what portion will flip in the discordant cells. Essentially, we don't have a sense of the size of our effect. But we can simulate various possibilities and then compute the power we would have under those possibilities. And then choose our sample size based on that knowledge.
+
+In any power analysis, we always have these basic inputs and outputs:
+
+- sample size
+- power (1-false negative rate)
+- effect size
+
+With any 2 of the 3, we can figure out the third.
+
+Here, the effect size is a function of the discordant cells:
+- p12
+- p21
+
+Both G*power and the MESS packages have functions that can compute power for a mcnemar's test.
+
+For the effect size portion of the calculation, G*Power asks for:
+
+- the ratio of p12 to p21 (which they very confusingly call the "odds ratio" although it is not a true odds ratio)
+- the proportion of the total responses that are in the discordant cells (i.e. p12 + p21)
+
+Meanwhile, the MESS package power_mcnemar_test() ask's for:
+
+- the ratio of p12 to p21 (which they call "psi")
+- the proportion for the discordant cell, which has the lower proportion of responses
+
+In either case, the effect size, is simply a function of:
+- p12
+- p21
+
+
+Now, it's hard for me to directly think in terms of the portions (p12 and p21) of the discordant cells.
+But it is easier for me to think about the proportion who say "yes" to the "before" question (i.e. the row percentage).
+(Which also necessary gives the percentage "no" before. e.g. If I think 30% will say "yes" to the before question, I'm implying that 70% will say "no" to this question).
+And then, I can think about the percentage of the beforehand "yeses" that I think will flip--which will give me p12 (i.e. if I think 30% will say "yes" beforehand, and that 95% will stick with yes, and thus 5% will flip, then I can compute that I think p12 will be 0.015, i.e. 30% * 5% = 1.5%).
+Likewise, I can think about the percentage of the beforehand "no's" that will flip (which will give p21).
+
+Let me provide a full example. Imagine, I think that beforehand the proportion saying yes will be 40%. And I think that that 90% of these will initial "yeses" will stick with that response afterwards too, and I think that 30% of the initial "no's" will flip, then I can compute that p12 = and p21 = . This is depicted below.
+
+Just knowing this:
+
+               after
+
+           yes      no
+        
+        -----------------
+        |       |       |
+b  yes  |   ?   |   ?   |  40%
+e       | (?*.9)| (?*?) |
+f       -----------------
+o       |       |       |
+r  no   |    ?  |   ?   |  ?%
+e       | (?*?) | (?*.7)|
+        -----------------
+           
+           ?%     ?%
+
+
+Means we can fill in all this:
+
+
+               after
+
+           yes      no
+        
+        -----------------
+        |       |       |
+b  yes  |   36  |   4   |  40%
+e       |(40*.9)|(40*.1)|
+f       -----------------
+o       |       |       |
+r  no   |   18  |  42   |  60%
+e       |(60*.3)|(60*.7)|
+        -----------------
+           
+           54%     46%
+
+
+So let's say, this is indeed the situation we think we are in (40% yes beforehand, 90% of those yeses stay, 30% of the no's flip). How large of a sample would we need to collect to have 90% power. We can compute that with the function from the MESS package.
+
+```{r}
+MESS::power_mcnemar_test().
+```
 
 
 
@@ -152,3 +237,25 @@ mcnemar.test(m3)
 
 
 # --- END/MISC ---
+
+# --- References ---
+
+1. Intro to mcnemar's test
+- An Introduction to Categorical Data Analysis. Alan Agresti. 3rd Edition. 2019. John Wiley & Sons, Inc.
+--> see: Chapter 8 (Models for Matched Pairs), p. 228-229
+
+- Learning statistics with R: A tutorial for psychology students and other beginners. (Version 0.6.1). Danielle Navarro (bookdown translation: Emily Kothe). https://learningstatisticswithr.com/book/
+--> see: Chapter 12 (Categorical Data Analysis), subsection 12.8 (The Mcnemar Test)
+
+2. G-Power Manual (for explanation of mcnemar power calculations)
+- https://www.gpower.hhu.de/fileadmin/redaktion/Fakultaeten/Mathematisch-Naturwissenschaftliche_Fakultaet/Psychologie/AAP/gpower/GPowerManual.pdf
+--> see section 5, p. 14-15 for explanation of mcnemar power calculation
+
+3. Papers on power calculations for mcnemar's test:
+- Duffy, S. W. (1984). Asymptotic and exact power for the McNemar test and its analogue with R controls per case. Biometrics, 1005-1015.
+--> link: https://www.jstor.org/stable/2531151
+--> this is the paper the MESS package cites for it's mcnemar power calculation
+
+- Connor, R. J. (1987). Sample size for testing differences in proportions for the paired-sample design. Biometrics, 207-211.
+--> link: https://www.jstor.org/stable/2531961
+--> this is the paper cited by the github package by greenwell that calculates power: https://gist.github.com/bgreenwell/a2ef7cb6d5f340b516a6ad0b4f26f447
