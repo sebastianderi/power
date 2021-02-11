@@ -1,0 +1,154 @@
+---
+title: "power_mcnemar"
+output: html_document
+---
+
+# --- Settings ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# --- Packages ---
+
+```{r}
+#library(readxl)
+library(tidyverse)
+#library(PropCIs)
+#library(gee)
+library(MESS)
+
+```
+
+# --- Analysis ---
+
+# 1. explanation
+
+The goal here will be to simulate the full space of possible outcomes in a mcenmar test.
+
+Any mcnemar test is done on a 2x2 contingency table, like the one shown below
+
+-----------------
+|       |       |
+|   a   |   b   |
+|       |       |
+-----------------
+|       |       |
+|   c   |   d   |
+|       |       |
+-----------------
+
+The cells -- a,b,c,d -- can be either thought of as counts or proportions. Most of the time, it is more intuitive for me to think in terms of proportions.
+
+In the mcnemar test, often we have two measurements of a proportion and we care how that proportion changes from before to after. For example, in the study for which I am doing this power analysis, I am asking people "before", "Would you want to live forever?". And then after, I ask that same person "Would you want to live forever, if X?" (where X is some good thing, like "you maintained good physical and mental health"). So, we do the mcnemar's test because we want to see, how this new condition (maintaining good physical health) changes the proportion of people who say they want to live forever. So, for example, we might imagine the proportion who say they want to live forever "before"/at a baseline, to be something like 30% (data we've compiled from public opinion polling and our own surveys ranges from ~5% to ~30%). And we might imagine the proportion of people who say they want to live forever "after"/under the new condition (e.g. maintaining good physical health), to be higher--say 65%.
+
+We can represent this as the row and column totals in the contingency table.
+
+
+               after
+
+           yes      no
+        
+        -----------------
+        |       |       |
+b  yes  |   a   |   b   |  30% = (a+b)
+e       |       |       |
+f       -----------------
+o       |       |       |
+r  no   |   c   |   d   |  (100-30%)
+e       |       |       |
+        -----------------
+           
+           65%   (100-65%)
+        = (a+c)
+
+But note, that if the same person is asked both questions, there are 4 total combinations of response options: (a) yes before & yes after, (c) no before & yes after, (d) no before & no after, (b) yes before & no after.
+
+To keep a longer story short, figure out whether 30% before is different from 50% after, mcnemar's test compares just the proportions in cell's b and c -- i.e. the "discordant cells", where people flipped their responses (also sometimes referred to as p12 and p21, where the first number in subscript reference the row number and the second number in the subscript references the column number). So, the whole thing really depends on those people who flip their responses and how they do so relative to each other.
+
+If there is no flipping at all, then the ncemar's test will be absolutely insignificant. Actually, it won't even yield a test statistic or p-value.
+
+               after
+
+           yes      no
+        
+        -----------------
+        |       |       |
+b  yes  |   30  |   0   |  30%
+e       |       |       |
+f       -----------------
+o       |       |       |
+r  no   |   0   |   70  |  70$
+e       |       |       |
+        -----------------
+           
+           30%     70%
+           
+Here is that test for that.
+
+```{r}
+m1 <- matrix(c(30, 0, 0, 70), nrow = 2, byrow = TRUE)
+m1
+```
+```{r}
+
+mcnemar.test(m1)
+```
+Let's introduce just some trivial flipping (1 of before yes's flips and one of the 1 after no's flips). And as we see, no significant difference.
+
+```{r}
+m2 <- matrix(c(29, 1, 1, 69), nrow = 2, byrow = TRUE)
+m2
+
+```
+```{r}
+# note, row and column totals are still preserved
+colSums(m2)
+rowSums(m2)
+```
+```{r}
+mcnemar.test(m2)
+```
+
+So, whether the intervention is significant and the "before" proportion is different from the "after" proportion really depends on the flipping in the discordant cells. And, here we are expected an increase in the "after" proportion relative to the "before". That is, we expect more people to say they want to live forever if we clarify that they get to do so in good health. The way for this to happen is for a bunch of people who answered "no" initially, to switch to "yes" afterwards, when the conditions are sweeter, but for none or not many people who answered "yes" before to switch to "no" afterwards (and after all, why would they? they said yes initially, and now things are only better).
+
+So that might look something like this.
+
+               after
+
+           yes      no
+        
+        -----------------
+        |       |       |
+b  yes  |   30  |   0   |  30%
+e       | (30*1)| (30*0)|
+f       -----------------
+o       |       |       |
+r  no   |   35  |   35  |  70%
+e       |(70*.5)|(70*.5)|
+        -----------------
+           
+           65%     35%
+
+
+Here, we see that 100% of the initial yes's stuck with their yes (and 0% flipped to no). But 50% of the initial no's flipped to yes (and 50% stayed). This gives us 30% who initially said yes, and 65% who said yes afterwards, in the condition where they were explicitly told they would have good health. Is this significant?
+
+Let's do mcenmar's test, to see if this difference is significant. It is. Indeed, very, very significant.
+
+```{r}
+m3 <- matrix(c(30, 0, 35, 35), nrow = 2, byrow = TRUE)
+m3
+```
+
+```{r}
+mcnemar.test(m3)
+```
+
+
+
+
+## 1. make dataframe
+
+
+
+# --- END/MISC ---
