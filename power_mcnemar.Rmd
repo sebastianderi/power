@@ -30,15 +30,15 @@ The goal here will be to simulate the full space of possible outcomes in a mcenm
 
 Any mcnemar test is done on a 2x2 contingency table, like the one shown below
 
------------------
-|       |       |
-|   a   |   b   |
-|       |       |
------------------
-|       |       |
-|   c   |   d   |
-|       |       |
------------------
+     -----------------
+     |       |       |
+     |   a   |   b   |
+     |       |       |
+     -----------------
+     |       |       |
+     |   c   |   d   |
+     |       |       |
+     -----------------
 
 The cells -- a,b,c,d -- can be either thought of as counts or proportions. Most of the time, it is more intuitive for me to think in terms of proportions.
 
@@ -46,9 +46,7 @@ In the mcnemar test, often we have two measurements of a proportion and we care 
 
 We can represent this as the row and column totals in the contingency table.
 
-
                after
-
            yes      no
         
         -----------------
@@ -71,7 +69,6 @@ To keep a longer story short, figure out whether 30% before is different from 50
 If there is no flipping at all, then the ncemar's test will be absolutely insignificant. Actually, it won't even yield a test statistic or p-value.
 
                after
-
            yes      no
         
         -----------------
@@ -117,7 +114,6 @@ So, whether the intervention is significant and the "before" proportion is diffe
 So that might look something like this.
 
                after
-
            yes      no
         
         -----------------
@@ -250,11 +246,246 @@ Okay, but suppose we don't actually know exactly what the proportion "yes" befor
 Since these inputs (portion yes to start, and portion of yes's flipping and portion of no's flipping) comprise the effect size here, we we can then either specify a power level and compute the sample size we would need to achieve that level of power, or specify a sample size and compute the level of power such a sample size would achieve.
 
 
-# 2. setup (effect size + power --> n)
+
+
+
+```{r}
+df_power
+```
+
+
+# 5. just some reasonable possibilities
+
+In this section, I am going to do a more traditional power analysis. By just plugging in various plausible values for each of the inputs and examining how that effects the outcome power metrics of interest.
+
+Okay, so to start, we will consider the range of possibilities for the proportion of people who will say yes.
+
+From public polls, the range of values here is: 5% to 27%. And in our existing surveys, it was around 28% to 32%. Our survey has a sample size of 100, but the phrasing was closer to how the phrasing will be. The polls have larger samples (n=750 - n=3850), but the phrasing is farther off from what we wll probably go with. Nevertheless, I will consider this the range of plausible values to explore.
+
+Next, I need to get a handle on the two remaining parameters that affect the effect size. The portion of yes's that flip. And the proportion of no's that flip. Now, all the scenarios improve on the state of living forever, from baseline. So, it really seem reasonable to expect not a single person to flip from "yes" before, to no afterward. On the other hand, we literally cannot compute power if the resultant p12 cell is zero. So for practical purposes it has to be at least some trivial value above zero. But making it some very very small trivial value will probably hugely inflate the effect sizes. So I will pick some small values that are not necessarily trivially small (e.g. 1%). For the portion of initial no's that flip, this is really where the uncertainty lies. So for this, I will just explore a range of values from basically no flipping, to a massive amount of flipping.
+
+Finally, I have to decide whether I want to fix power level and explore needed sample size, or fix sample size and compute achieved power. I'd like to look at it both ways, but I will start by fixing power and exploring resultant sample sizes.
+
+So, let me start off with just the most likely outcome I envision. This will be a situation with the following parameters:
+
+- yes proportion before hand: 30%
+- proportion of yes's the flip: 1%
+- proportion of no's that flip: [5-50%]
+- desired power: [90-99%]
+
+Without using a loop, I compute the sample size needed for various values in this range of parameters.
+
+```{r}
+# preset values
+yes_prop <- 0.30
+yes_flip <- 0.01
+no_flip <- 0.05
+desired_power <- 0.90
+
+# resultant discordant props
+p12 <- yes_prop * yes_flip
+p21 <- (1-yes_prop) * no_flip
+
+# set mind and max
+min_prop <- min(p12, p21)
+max_prop <- max(p12, p21)
+
+# print relevant effect size inputs
+print(paste0("yes-before: ", round(100*yes_prop, 1), "%"))
+print(paste0("yes-after: ", round(100*(yes_prop * (1-yes_flip) + (1-yes_prop) * no_flip), 1), "%"))
+print(paste0("yes_flip: ", round(100*yes_flip, 1), "%"))
+print(paste0("no_flip: ", round(100*no_flip, 1), "%"))
+print(paste0("p_yes->no: ", round(100*p12, 1), "%"))
+print(paste0("p_no->yes: ", round(100*p21, 1), "%"))
+
+# compute needed sample size
+MESS::power_mcnemar_test(power = desired_power,
+                         psi = max_prop/min_prop,
+                         paid = min_prop,
+                         alternative = "two.sided")
+
+
+```
+
+```{r}
+# preset values
+yes_prop <- 0.30
+yes_flip <- 0.01
+no_flip <- 0.05
+desired_power <- 0.95
+
+# resultant discordant props
+p12 <- yes_prop * yes_flip
+p21 <- (1-yes_prop) * no_flip
+
+# set mind and max
+min_prop <- min(p12, p21)
+max_prop <- max(p12, p21)
+
+# print relevant effect size inputs
+print(paste0("yes-before: ", round(100*yes_prop, 1), "%"))
+print(paste0("yes-after: ", round(100*(yes_prop * (1-yes_flip) + (1-yes_prop) * no_flip), 1), "%"))
+print(paste0("yes_flip: ", round(100*yes_flip, 1), "%"))
+print(paste0("no_flip: ", round(100*no_flip, 1), "%"))
+print(paste0("p_yes->no: ", round(100*p12, 1), "%"))
+print(paste0("p_no->yes: ", round(100*p21, 1), "%"))
+
+# compute needed sample size
+MESS::power_mcnemar_test(power = desired_power,
+                         psi = max_prop/min_prop,
+                         paid = min_prop,
+                         alternative = "two.sided")
+
+
+```
+
+```{r}
+# preset values
+yes_prop <- 0.30
+yes_flip <- 0.01
+no_flip <- 0.10
+desired_power <- 0.95
+
+# resultant discordant props
+p12 <- yes_prop * yes_flip
+p21 <- (1-yes_prop) * no_flip
+
+# set mind and max
+min_prop <- min(p12, p21)
+max_prop <- max(p12, p21)
+
+# print relevant effect size inputs
+print(paste0("yes-before: ", round(100*yes_prop, 1), "%"))
+print(paste0("yes-after: ", round(100*(yes_prop * (1-yes_flip) + (1-yes_prop) * no_flip), 1), "%"))
+print(paste0("yes_flip: ", round(100*yes_flip, 1), "%"))
+print(paste0("no_flip: ", round(100*no_flip, 1), "%"))
+print(paste0("p_yes->no: ", round(100*p12, 1), "%"))
+print(paste0("p_no->yes: ", round(100*p21, 1), "%"))
+
+# compute needed sample size
+MESS::power_mcnemar_test(power = desired_power,
+                         psi = max_prop/min_prop,
+                         paid = min_prop,
+                         alternative = "two.sided")
+
+
+```
+
+Okay, I am starting to feel just plugging in all these possible values here. And would rather loop through all the possibilities and examine the results.
+
+# 6. loop: reasonable values
+
+## 6.1. create dataframe
+
+```{r}
+# values to loop through
+p_yes_before <- c(0.05, 0.10, 0.20, 0.30)
+p_yes_flip <- c(0.01, 0.05, 0.10) 
+p_no_flip <- c(0.01, 0.02, 0.05, 0.10, 0.20, 0.25, 0.30, 0.40, 0.50, 0.75)
+n_val <- c(100, 200, 300, 500, 750, 1000) 
+
+# initialize data frame
+total_rows <- length(p_yes_before) * length(p_yes_flip) * length(p_no_flip) * length(n_val)
+df_power <- data.frame(p_yes_before = double(total_rows),
+                       p_yes_after = double(total_rows),
+                       p_yes_flip = double(total_rows),
+                       p_no_flip = double(total_rows),
+                       p_yes2no = double(total_rows),
+                       p_no2yes = double(total_rows),
+                       n_val = double(total_rows),
+                       power = double(total_rows),
+                       psi = double(total_rows),
+                       paid = double(total_rows))
+
+# check
+total_rows
+df_power
+
+```
+
+## 6.2. loop, compute, and save
+
+```{r}
+
+i <- 0
+for(p_yes_before_i in p_yes_before){
+  for(p_yes_flip_i in p_yes_flip){
+    for(p_no_flip_i in p_no_flip){
+      for(n_val_i in n_val){
+        i <- i + 1
+        
+        # compute: props in discordant cells and yes's after
+        p_yes2no <- p_yes_before_i * p_yes_flip_i
+        p_no2yes <- (1 - p_yes_before_i) * p_no_flip_i
+        p_yes_after <- p_yes_before_i*(1-p_yes2no) + p_no2yes
+        
+        # set min and max
+        min_prop <- min(p_yes2no, p_no2yes)
+        max_prop <- max(p_yes2no, p_no2yes)
+        psi = max_prop / min_prop
+        paid = min_prop
+        
+        # compute achieved powner
+        power_i <- MESS::power_mcnemar_test(n = n_val_i,
+                                            psi = psi,
+                                            paid = paid,
+                                            alternative = "two.sided")$power
+
+        # save
+        df_power[i,]$p_yes_before <- p_yes_before_i
+        df_power[i,]$p_yes_after <- p_yes_after
+        df_power[i,]$p_yes_flip <- p_yes_flip_i
+        df_power[i,]$p_no_flip <- p_no_flip_i
+        df_power[i,]$p_yes2no <- p_yes2no
+        df_power[i,]$p_no2yes <- p_no2yes
+        df_power[i,]$n_val <- n_val_i
+        df_power[i,]$power <- power_i
+        df_power[i,]$psi <- psi
+        df_power[i,]$paid <- paid
+      
+      }
+    }
+  }
+}
+
+```
+
+# 6.3. view df
+
+```{r}
+df_power
+
+```
+
+
+# 6.4. graph results
+
+```{r, fig.width=10, fig.height=6}
+df_power %>% 
+  ggplot(aes(x = n_val,
+             y = power,
+             color = as.factor(p_yes_before))) +
+  geom_point() +
+  geom_line() +
+  facet_grid(p_yes_flip ~ p_no_flip) +
+  theme_bw() +
+  labs(x = "Sample Size",
+       y = "Power",
+       color = "% initially saying Yes") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "top")
+  NULL
+
+```
+
+
+# 7. loop: all possible values
+
+# 7.1. setup (effect size + power --> n)
 
 To start, I will loop through all the possible effect sizes, and power levels (since all of these values are bounded between 0 and 1). And compute the sample size I would need for that given level of power and effect size.
 
-# 3. create dataframe
+## 7.2. create dataframe
 
 ```{r}
 # values to loop through
@@ -280,7 +511,8 @@ total_rows
 df_power
 
 ```
-# 4. compute and save
+
+## 7.3. loop, compute, and save
 
 ```{r}
 p_baseline <- seq(0, 1, 0.1)
@@ -299,6 +531,11 @@ for(p_baseline_i in p_baseline){
         p12 <- p_baseline_i * (1 - p_yes_stay_i)
         p21 <- (1 - p_baseline_i) * p_no_flip_i
         
+        # set mind and max
+        min_prop <- min(p12, p21)
+        max_prop <- max(p12, p21)
+
+        
         # compute power and save
         df_power[i,]$p_baseline <- p_baseline_i
         df_power[i,]$p_yes_stay <- p_yes_stay_i
@@ -309,8 +546,8 @@ for(p_baseline_i in p_baseline){
         df_power[i,]$psi <- max(p12/p21, p21/p12)
         df_power[i,]$paid <- min(p12, p21)
         #df_power[i,]$n <- MESS::power_mcnemar_test(power = power_val_i,
-        #                                           psi = max(p12/p21, p21/p12), # needs to be above one, so always take higher ratio
-        #                                           paid = min(p12, p21), # always wants the smaller of the two
+        #                                           psi = max_prop/min_prop,
+        #                                           paid = min_prop,
         #                                           alternative = "two.sided")
       
       }
@@ -319,21 +556,6 @@ for(p_baseline_i in p_baseline){
 }
 
 ```
-
-```{r}
-df_power
-```
-
-
-# 5. just some reasonable possibilities
-
-In this section, I am going to do a more traditional power analysis. By just plugging in various plausible values for each of the inputs and examining how that effects the outcome power metrix of interest.
-
-Okay, so to start, we will consider the range of possibilities for the proportion of people who will say yes.
-
-From public polls, the range of values here is: 5% to 27%. And in our existing surveys, it was around 28% to 32%. Our survey has a sample size of 100, but the phrasing was closer to how the phrasing will be. The polls have larger samples (n=750 - n=3850), but the phrasing is farther off from what we wll probably go with. Nevertheless, I wil consider this the range of plausible values to explore.
-
-
 
 # --- END/MISC ---
 
