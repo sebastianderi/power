@@ -474,9 +474,12 @@ df_power
 
 ## 3.4. graph & interpret results
 
+From this chart, we can see that a sample size of 500, will give us 90% power of greater in any case where (1) the proportion of initial no's is 10% of greater, (2) the proportion of initial yes that flip is between 1% and 10%, (3) the initial proportion is anywhere from 5% to 30% (except in the one case, where the initial proportion is 30%, prop initial no's that flip is 10% and prop initial yes's that flip is also 10%, which has 80% power, and quickly bumps up to 90% if the proportion of initial no's that flip moves up even by a bit).
 
+Given these results and reasonable budget constraints, I will collect a sample of 500 participants.
 
 ```{r, fig.width=12, fig.height=8}
+plot_power <-
 df_power %>% 
   ggplot(aes(x = n_val,
              y = power,
@@ -485,6 +488,7 @@ df_power %>%
   geom_line() +
   facet_grid(p_yes_flip ~ p_no_flip) +
   scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  geom_rect(ymax = 1.1, ymin = 0.9, xmin = 0, xmax = 1100, alpha = 0.025, fill = "blue", color = FALSE) +
   theme_bw() +
   labs(x = "Sample Size",
        y = "Power",
@@ -496,10 +500,21 @@ df_power %>%
                       "\n (4) Initial Proportion Saying Yes (colored lines)")) +
   theme(axis.text.x = element_text(angle = 90),
         legend.position = "top",
-        plot.title = element_text(hjust = 0.5))
+        plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
+
+plot_power
 
 ```
 
+## 3.5. save graph
+
+```{r}
+ggsave(plot = plot_power,
+       filename = "power_mcnemar_s2.pdf",
+       width = 12,
+       height = 8)
+```
 
 
 # 4. Before V. After Probs, as function of flipping
@@ -508,7 +523,30 @@ The main outcome of interest is the of course the difference in the portion of p
 
 I already saved that outcome in the simulation in the previous section. So, I will just visualize those results now.
 
-```{r}
+Anything to the left of the diagonal, means that the proportion of yes's increase from before to after. As we can see, in all the possibilities we simulated, that is the case. 
+
+```{r, fig.width=13, fig.height=8}
+df_power %>% 
+  filter(n_val == 1000) %>%  # not dependent on sample size, so just pick one
+  ggplot(aes(x = p_yes_before,
+             y = p_yes_after)) +
+  geom_point(size = 2, alpha = 0.75) +
+  geom_line(size = 1.25, alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted") +
+  facet_grid(p_yes_flip ~ p_no_flip) +
+  scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  scale_x_continuous(breaks = seq(0, 1, 0.1), limits = c(0, 1)) +
+  theme_bw() +
+  labs(x = "Proportion Saying \"Yes\" Before",
+       y = "Proportion Saying \"Yes\" After",
+       title = paste0("Proportion Saying \"Yes\" After As A Function Of:",
+                      "\n (1) Proportion Saying \"Yes\" Before (x-axis)",
+                      " \n (2) Proportion of Initial No's That Flip (columns)",
+                      "\n (3) Proportion of Initial Yes's That Flip (rows)")) +
+  theme(axis.text.x = element_text(angle = 90,
+                                   size = 6),
+        plot.title = element_text(hjust = 0.5),
+        panel.grid.minor = element_blank())
 
 ```
 
