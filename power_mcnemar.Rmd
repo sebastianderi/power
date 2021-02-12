@@ -254,7 +254,7 @@ df_power
 ```
 
 
-# 5. just some reasonable possibilities
+# 2. Sample Size required for specific reasonable cases
 
 In this section, I am going to do a more traditional power analysis. By just plugging in various plausible values for each of the inputs and examining how that effects the outcome power metrics of interest.
 
@@ -373,9 +373,19 @@ MESS::power_mcnemar_test(power = desired_power,
 
 Okay, I am starting to feel just plugging in all these possible values here. And would rather loop through all the possibilities and examine the results.
 
-# 6. loop: reasonable values
+# 3. Power achieved in various plausible cases
 
-## 6.1. create dataframe
+Here, I will just explore the power that would be achieved for a range of, what I perceive to be plausible values for the parameters that affect power:
+
+1. proportion saying yes before: as mentioned before, the polling and survey data we have has varied from 5% to 30% on this
+2. the proportion of initial yes's that flip to no's: setting this low will increase power, by virtue of creating a large effect size (combined with even modestly larger proportion of initial no's switching to yes). but all of the scenario's make the conditions of immortality better. so, i don't want to bias myself in the "easy direction", but it's just really hard for me to imagine more than literally one or two people switching to no's. i honestly feel like what is reasonable is like 1-5% of yes's flipping. but i will explore up to 10% even 20% (even though that seems totally implausible to me)
+3. the proportion of initial no's that flip to yes's: this is really the open question, and i feel like what will determine the size of the effect. so i want to explore a large range of possibilities, from unreasonably small (1%, 2%, 5%) to that large middle range of what seems possible (10% up to even 50%) and then maybe some very large change values (75%), although at that point, the effect would be so big and obvious as to obviously be very highly powered
+4. sample size: here, i want to loop through the range of possible sample sizes that i could actually reasonably pay for (somewhere from 100 to 1000 total participants)
+
+
+## 3.1. create dataframe
+
+So, just preseting those values here, to loop through. And creating data frame to store desired outputs and inputs.
 
 ```{r}
 # values to loop through
@@ -403,7 +413,9 @@ df_power
 
 ```
 
-## 6.2. loop, compute, and save
+## 3.2. loop, compute, and save
+
+Actually compute the achieved power, for the various reasonable input values.
 
 ```{r}
 
@@ -425,7 +437,7 @@ for(p_yes_before_i in p_yes_before){
         psi = max_prop / min_prop
         paid = min_prop
         
-        # compute achieved powner
+        # compute achieved power
         power_i <- MESS::power_mcnemar_test(n = n_val_i,
                                             psi = psi,
                                             paid = paid,
@@ -450,7 +462,9 @@ for(p_yes_before_i in p_yes_before){
 
 ```
 
-# 6.3. view df
+## 3.3. view df
+
+View the output we just computed.
 
 ```{r}
 df_power
@@ -458,9 +472,11 @@ df_power
 ```
 
 
-# 6.4. graph results
+## 3.4. graph & interpret results
 
-```{r, fig.width=10, fig.height=6}
+
+
+```{r, fig.width=12, fig.height=8}
 df_power %>% 
   ggplot(aes(x = n_val,
              y = power,
@@ -468,94 +484,35 @@ df_power %>%
   geom_point() +
   geom_line() +
   facet_grid(p_yes_flip ~ p_no_flip) +
+  scale_y_continuous(breaks = seq(0, 1, 0.1)) +
   theme_bw() +
   labs(x = "Sample Size",
        y = "Power",
-       color = "% initially saying Yes") +
+       color = "% initially saying Yes",
+       title = paste0("Power as Function Of:",
+                      "\n (1) Sample Size (x-axis)",
+                      " \n (2) Proportion of Initial No's That Flip (columns)",
+                      "\n (3) Proportion of Initial Yes's That Flip (rows)",
+                      "\n (4) Initial Proportion Saying Yes (colored lines)")) +
   theme(axis.text.x = element_text(angle = 90),
-        legend.position = "top")
-  NULL
+        legend.position = "top",
+        plot.title = element_text(hjust = 0.5))
 
 ```
 
 
-# 7. loop: all possible values
 
-# 7.1. setup (effect size + power --> n)
+# 4. Before V. After Probs, as function of flipping
 
-To start, I will loop through all the possible effect sizes, and power levels (since all of these values are bounded between 0 and 1). And compute the sample size I would need for that given level of power and effect size.
+The main outcome of interest is the of course the difference in the portion of people saying yes they would want to live forever at baseline and the proportion who say yes in various scenarios. So, I want to see how that latter outcome (portion saying yes in a given scenario) is related to the proportion of initial yes's the flip and the proportion of initial no's the flip.
 
-## 7.2. create dataframe
+I already saved that outcome in the simulation in the previous section. So, I will just visualize those results now.
 
 ```{r}
-# values to loop through
-p_baseline <- seq(0, 1, 0.1)
-p_yes_stay <- seq(0, 1, 0.1)
-p_no_flip <- seq(0, 1, 0.1)
-power_val <- seq(0, 1, 0.1)
-
-# initialize data frame
-total_rows <- length(p_baseline) * length(p_yes_stay) * length(p_no_flip) * length(power_val)
-df_power <- data.frame(p_baseline = double(total_rows),
-                       p_yes_stay = double(total_rows),
-                       p_no_flip = double(total_rows),
-                       power_val = double(total_rows),
-                       p12 = double(total_rows),
-                       p21 = double(total_rows),
-                       psi = double(total_rows),
-                       paid = double(total_rows),
-                       n = double(total_rows))
-
-# check
-total_rows
-df_power
 
 ```
 
-## 7.3. loop, compute, and save
 
-```{r}
-p_baseline <- seq(0, 1, 0.1)
-p_yes_stay <- seq(0, 1, 0.1)
-p_no_flip <- seq(0, 1, 0.1)
-power_val <- seq(0, 1, 0.1)
-
-i <- 0
-for(p_baseline_i in p_baseline){
-  for(p_yes_stay_i in p_yes_stay){
-    for(p_no_flip_i in p_no_flip){
-      for(power_val_i in power_val){
-        i <- i + 1
-        
-        # resultant discordant probs
-        p12 <- p_baseline_i * (1 - p_yes_stay_i)
-        p21 <- (1 - p_baseline_i) * p_no_flip_i
-        
-        # set mind and max
-        min_prop <- min(p12, p21)
-        max_prop <- max(p12, p21)
-
-        
-        # compute power and save
-        df_power[i,]$p_baseline <- p_baseline_i
-        df_power[i,]$p_yes_stay <- p_yes_stay_i
-        df_power[i,]$p_no_flip <- p_no_flip_i
-        df_power[i,]$power_val <- power_val_i
-        df_power[i,]$p12 <- p12
-        df_power[i,]$p21 <- p21
-        df_power[i,]$psi <- max(p12/p21, p21/p12)
-        df_power[i,]$paid <- min(p12, p21)
-        #df_power[i,]$n <- MESS::power_mcnemar_test(power = power_val_i,
-        #                                           psi = max_prop/min_prop,
-        #                                           paid = min_prop,
-        #                                           alternative = "two.sided")
-      
-      }
-    }
-  }
-}
-
-```
 
 # --- END/MISC ---
 
