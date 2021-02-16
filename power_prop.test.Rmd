@@ -1,0 +1,156 @@
+---
+title: "power_prop.test"
+output:
+  pdf_document: default
+  html_document: default
+---
+# --- Settings ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# --- Packages ---
+
+```{r}
+library(tidyverse)
+
+```
+
+# --- Analysis ---
+
+I want to compute achieved power, as a function of:
+-- (1) sample size
+-- (2) proportion 1
+-- (3) proportion 2
+
+I will only explore a small number, although large range, of sample sizes: 50, 100, 500, 1000 (per cell). I will explore all possible proportions, with a step size of 0.10.
+
+# 1. create data frame to store results
+
+```{r}
+n_vals <- c(50, 100, 500, 1000)
+prop1 <- seq(0, 1, 0.1)
+prop2 <- seq(0, 1, 0.1)
+
+total_rows <- length(n_vals) * length(prop1) * length(prop2)
+
+df_power = data.frame(n = integer(total_rows),
+                      p1 = double(total_rows),
+                      p2 = double(total_rows),
+                      power = double(total_rows),
+                      power_bonf = double(total_rows))
+
+df_power %>% 
+  sample_n(10)
+```
+
+# 2. loop through all values and compute achieved power
+
+```{r}
+num_tests <- choose(n = 5, k = 2)
+
+i <- 0
+for (n_i in n_vals){
+  for (p1_i in prop1){
+    for (p2_i in prop2){
+      i <- i + 1
+      
+      df_power[i,]$n <- n_i
+      df_power[i,]$p1 <- p1_i
+      df_power[i,]$p2 <- p2_i
+      df_power[i,]$power <- power.prop.test(n = n_i,
+                                            p1 = p1_i,
+                                            p2 = p2_i,
+                                            sig.level = 0.05,
+                                            alternative = "two.sided")$power
+      df_power[i,]$power_bonf <- power.prop.test(n = n_i,
+                                                p1 = p1_i,
+                                                p2 = p2_i,
+                                                sig.level = 0.05/num_tests,
+                                                alternative = "two.sided")$power
+      
+      
+    }
+  }
+}
+
+```
+
+# 3. look at computed values
+
+```{r}
+df_power %>% 
+  sample_n(10)
+```
+
+
+# 4. graph results
+
+The thing to observe here is basically that with a sample size of n=100 per cell. Power is extremely low, for difference between the two proportions that are of size 10% (i.e. prop 2 is 10% percentage points than prop 1, like say 60% v. 50%). Power becomes reasonable (~80% and over), when the difference is of size 20% (e.g. if n=100, prop1 = 50, and prop2 = 70%, than power = 83%).
+
+```{r, fig.width=12, fig.height=10}
+plot_power_prop.test <-
+df_power %>% 
+  mutate(power = round(power, 2)) %>% 
+  ggplot(aes(x = p1,
+             y = p2,
+             fill = power,
+             label = power)) +
+  geom_raster() +
+  geom_text() +
+  facet_wrap(vars(n), ncol = 2, scales = "free") +
+  scale_x_continuous(breaks = prop1) +
+  scale_y_continuous(breaks = prop2) +
+  labs(x = "Proportion 1",
+       y = "Proportion 2",
+       title = paste0("Power as a function of:",
+                      "\n (1) Proportion 1 (x-axis)",
+                      "\n (2) Proportion 2 (y-axis)",
+                      "\n (3) Sample Size, per cell (panels)")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+plot_power_prop.test
+
+```
+
+# 5. save graph
+
+```{r}
+if (FALSE){
+ggsave(plot = plot_power_prop.test,
+       filename = "plot_power_prop.test.pdf",
+       width = 12, height = 10)
+}
+```
+
+# 6. graph same results, but with alpha level adjusted for bonferroni correction
+
+Now, here the differences between prop 1 and prop 2 in percentage points has to be of size 30% for there to be ~80%/90%+ power.
+
+```{r, fig.width=12, fig.height=10}
+df_power %>% 
+  mutate(power_bonf = round(power_bonf, 2)) %>% 
+  ggplot(aes(x = p1,
+             y = p2,
+             fill = power_bonf,
+             label = power_bonf)) +
+  geom_raster() +
+  geom_text() +
+  facet_wrap(vars(n), ncol = 2, scales = "free") +
+  scale_x_continuous(breaks = prop1) +
+  scale_y_continuous(breaks = prop2) +
+  labs(x = "Proportion 1",
+       y = "Proportion 2",
+       title = paste0("Power as a function of:",
+                      "\n (1) Proportion 1 (x-axis)",
+                      "\n (2) Proportion 2 (y-axis)",
+                      "\n (3) Sample Size, per cell (panels)",
+                      "\n (note: this is power, after adjust p-level for Bonferroni correction")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
